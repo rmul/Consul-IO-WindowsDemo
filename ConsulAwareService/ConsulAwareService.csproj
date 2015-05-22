@@ -37,7 +37,7 @@
   <ItemGroup>
     <Reference Include="Consul, Version=0.5.1.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\consuldotnet\Consul\bin\Debug\Consul.dll</HintPath>
+      <HintPath>..\SolutionItems\Consul.dll</HintPath>
     </Reference>
     <Reference Include="Microsoft.Owin">
       <HintPath>..\packages\Microsoft.Owin.2.0.2\lib\net45\Microsoft.Owin.dll</HintPath>

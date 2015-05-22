@@ -16,6 +16,11 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ConsulAwareListener", "Cons
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Client", "Client\Client.csproj", "{A3C2A680-1E07-4DC0-87E4-A31DD1E00131}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "SolutionItems", "SolutionItems", "{454BF7D8-6C42-4D7D-ADD0-9FE62BBF3103}"
+	ProjectSection(SolutionItems) = preProject
+		SolutionItems\Consul.dll = SolutionItems\Consul.dll
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
