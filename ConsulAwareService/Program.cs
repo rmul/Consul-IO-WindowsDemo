@@ -7,7 +7,7 @@ using Consul;
 using Microsoft.Owin.Hosting;
 using Microsoft.Win32.SafeHandles;
 
-namespace OWINSelfHostSampleConsole
+namespace ConsulAwareService
 {
     class Program : IDisposable
     {
