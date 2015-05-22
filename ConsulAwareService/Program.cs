@@ -14,20 +14,11 @@ namespace OWINSelfHostSampleConsole
         bool _disposed;
         // Instantiate a SafeHandle instance.
         readonly SafeHandle _handle = new SafeFileHandle(IntPtr.Zero, true);
-        EventHandler _cancelService;
-        EventHandler _cancelOwinListener;
-        EventHandler _cancelConsulTtl;
-        EventHandler _cancelConsulLock;
         internal Client ConsulClient;
         Consul.Semaphore _semaphore;
         private const int ListenPort = 9000;
         private const string ListenAddress = "+";
         private readonly bool _consulEnabled;
-        private Thread _serviceThread;
-        private Thread _consulTtlThread;
-        private Thread _consulLockThread;
-        private Thread _owinListenerThread;
-        //private string _checkAddress = "localhost";
 
         public Program()
         {
@@ -59,127 +50,7 @@ namespace OWINSelfHostSampleConsole
             //if (_consulClient.Agent.ServiceRegister(svcreg).Wait(5000)) _semaphore = _consulClient.Semaphore("AmazingService/lock", 1);
             return ConsulClient.Agent.ServiceRegister(svcreg).Wait(5000);
         }
-
-        void OwinListenerStart()
-        {
-            CancellationTokenSource cts = new CancellationTokenSource();
-            // ReSharper disable once AccessToDisposedClosure
-            _cancelOwinListener += (sender, obj) => { cts.Cancel(); };
-            try
-            {
-                OwinListener(cts.Token);
-            }
-            catch (OperationCanceledException)
-            {
-                //cleanup after cancellation if required...
-                Console.WriteLine("Operation was canceled as expected.");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Something unexpected happened: {0}", ex);
-            }
-            finally
-            {
-                //cts.Dispose();
-            }
-        }
-
-        void ConsulTtlStart()
-        {
-            CancellationTokenSource cts = new CancellationTokenSource();
-            // ReSharper disable once AccessToDisposedClosure
-            _cancelConsulTtl += (sender, obj) => { cts.Cancel(); };
-            try
-            {
-                ConsulTtl(cts.Token);
-            }
-            catch (OperationCanceledException)
-            {
-                //cleanup after cancellation if required...
-                Console.WriteLine("Operation was canceled as expected.");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Something unexpected happened: {0}", ex);
-            }
-            finally
-            {
-                cts.Dispose();
-            }
-        }
-
-        void ConsulLockStart()
-        {
-            CancellationTokenSource cts = new CancellationTokenSource();
-            _cancelConsulLock += (sender, obj) => { cts.Cancel(); };
-            try
-            {
-                ConsulLock(cts.Token);
-            }
-            catch (OperationCanceledException)
-            {
-                //cleanup after cancellation if required...
-                Console.WriteLine("Operation was canceled as expected.");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Something unexpected happened: {0}", ex);
-            }
-            finally
-            {
-                //cts.Dispose(); //Does not seem to need dispose and might throw errors on the eventhandler if is is (http://stackoverflow.com/questions/6960520/when-to-dispose-cancellationtokensource)
-
-                //Lock aquired, notify something
-                _serviceThread = new Thread(ServiceStart);
-                //Thread serviceThread = new Thread(prog.ServiceStart);
-                _serviceThread.Start();
-            }
-        }
-
-        void ServiceStart()
-        {
-            CancellationTokenSource cts = new CancellationTokenSource();
-            // ReSharper disable once AccessToDisposedClosure
-            _cancelService += (sender, obj) => { cts.Cancel(); };
-            try
-            {
-                Service(cts.Token);
-            }
-            catch (OperationCanceledException)
-            {
-                //cleanup after cancellation if required...
-                Console.WriteLine("Operation was canceled as expected.");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Something unexpected happened: {0}", ex);
-            }
-            finally
-            {
-                //cts.Dispose();
-            }
-        }
-
-        private void Service(CancellationToken token)
-        {
-            while (!(_consulEnabled) || (_consulEnabled && _semaphore.IsHeld))
-            {
-                Console.Write("Y");
-                Thread.Sleep(1000);
-                if (token.IsCancellationRequested)
-                {
-                    // observe cancellation
-                    Console.WriteLine("Cancellation observed.");
-                    if (_consulEnabled && _semaphore.IsHeld) _semaphore.Release();
-                    if (_semaphore != null) try { _semaphore.Destroy(); }
-                        catch (SemaphoreInUseException) { }
-                    throw new OperationCanceledException(token); // acknowledge cancellation
-                }
-            }
-            Console.WriteLine("\nLock Lost, reacquiring");
-            _consulLockThread = new Thread(ConsulLockStart);
-            _consulLockThread.Start();
-        }
+       
 
         internal class XService : IDisposable
         {
@@ -398,57 +269,7 @@ namespace OWINSelfHostSampleConsole
             }
         }
 
-        private static void OwinListener(CancellationToken token)
-        {
-            //// Start OWIN host 
-            string baseAddress = string.Format("http://{0}:{1}/", ListenAddress, ListenPort);
-            using (WebApp.Start<Startup>(url: baseAddress))
-            {
-                Console.WriteLine("API hosted on {0}", Environment.OSVersion);
-                Console.WriteLine("Platform: {0}", Environment.OSVersion.Platform);
-                Console.WriteLine("Version: {0}", Environment.OSVersion.Version);
-                Console.WriteLine("VersionString: {0}", Environment.OSVersion.VersionString);
-                Console.WriteLine("ServicePack: {0}", Environment.OSVersion.ServicePack);
-
-                Console.WriteLine("Listening on {0}", baseAddress);
-                while (true)
-                {
-                    Thread.Sleep(1000);
-                    if (token.IsCancellationRequested)
-                    {
-                        // observe cancellation
-                        Console.WriteLine("Cancellation observed.");
-                        throw new OperationCanceledException(token); // acknowledge cancellation
-                    }
-                }
-            }
-        }
-
-        private void ConsulTtl(CancellationToken token)
-        {
-            while (true)
-            {
-                ConsulClient.Agent.PassTTL("service:AmazingService", "Alive").Wait(5000);
-                Thread.Sleep(1000);
-                if (token.IsCancellationRequested)
-                {
-                    // observe cancellation
-                    Console.WriteLine("Cancellation observed.");
-                    throw new OperationCanceledException(token); // acknowledge cancellation
-                }
-            }
-        }
-
-        private void ConsulLock(CancellationToken token)
-        {
-            Console.WriteLine("Trying to acquire lock");
-            if (_semaphore != null) try { _semaphore.Destroy(); }
-                catch (SemaphoreInUseException) { }
-            SemaphoreOptions so = new SemaphoreOptions("AmazingService/lock", 1) {SessionName = "AmazingServiceSession"};
-            _semaphore = ConsulClient.Semaphore(so);
-            _semaphore.Acquire(token);
-            Console.WriteLine("Lock acquired, becoming active");
-        }
+        
 
         static void Main()
         {
@@ -456,29 +277,11 @@ namespace OWINSelfHostSampleConsole
             var svc = new XService(prog);
             svc.Start();
 
-            //if (prog._consulEnabled)
-            //{
-            //    prog._consulTtlThread = new Thread(prog.ConsulTtlStart);
-            //    prog._consulTtlThread.Start();
-            //    prog._consulLockThread = new Thread(prog.ConsulLockStart);
-            //    prog._consulLockThread.Start();
-            //}
-            //else
-            //{
-            //    prog._serviceThread = new Thread(prog.ServiceStart);
-            //    prog._serviceThread.Start();
-            //}
-            //prog._owinListenerThread = new Thread(prog.OwinListenerStart);
-            //prog._owinListenerThread.Start();
 
 
             Console.WriteLine("Press 'c' to cancel this service.");
             while (Console.ReadKey(true).KeyChar != 'c') Thread.Sleep(100);
 
-            //if (prog._cancelConsulTtl != null) prog._cancelConsulTtl.Invoke(prog, new EventArgs());
-            //if (prog._cancelConsulLock != null) prog._cancelConsulLock.Invoke(prog, new EventArgs());
-            //if (prog._cancelService != null) prog._cancelService.Invoke(prog, new EventArgs());
-            //if (prog._cancelOwinListener != null) prog._cancelOwinListener.Invoke(prog, new EventArgs());
             Console.WriteLine("Stopping all threads");
             bool stopped = svc.Stop();
             if (stopped)
@@ -486,17 +289,9 @@ namespace OWINSelfHostSampleConsole
                 svc.Dispose();
             }
             
-            //while ((prog._serviceThread != null && prog._serviceThread.IsAlive) ||
-            //    (prog._consulLockThread != null && prog._consulLockThread.IsAlive) ||
-            //    (prog._consulTtlThread != null && prog._consulTtlThread.IsAlive) ||
-            //    (prog._owinListenerThread != null && prog._owinListenerThread.IsAlive))
-            //{
-            //    Console.WriteLine("\nWaiting for threads to end");
-            //    Thread.Sleep(1000);
-            //}
+
             Console.WriteLine("All done, Press enter to exit.");
             Console.ReadLine();
-            //prog.Dispose();
         }
 
         public void Dispose()
